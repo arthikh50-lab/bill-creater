@@ -94,6 +94,29 @@ button.secondary{
   cursor:pointer;font-family:inherit;padding:0;margin-top:4px;
 }
 .reset-link:hover{color:var(--ink);}
+
+@media(max-width:640px){
+  table, thead, tbody, tr, td{display:block; width:100%;}
+  thead{display:none;}
+  tbody tr{border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; position:relative;}
+  tbody td{border:none !important; padding:5px 0 !important; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+  tbody td::before{content:attr(data-label); font-size:11.5px; color:var(--ink-soft); flex:none;}
+  tbody td input{flex:1; text-align:right; max-width:62%;}
+  tbody td .amt{flex:1; text-align:right;}
+  tbody td:nth-child(5){position:absolute; top:8px; right:8px; padding:0 !important;}
+}
+
+.hist-search{margin-bottom:12px;}
+.hist-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+.hist-row:last-child{border-bottom:none;}
+.hist-main{flex:1;min-width:140px;display:flex;flex-direction:column;gap:2px;}
+.hist-meta{font-size:12px;color:var(--ink-soft);}
+.hist-amt{font-family:'Fraunces',serif;font-weight:600;min-width:90px;text-align:right;}
+.hist-actions{display:flex;gap:6px;}
+.hist-open{background:none;border:1px solid var(--line);color:var(--teal);padding:6px 12px;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;}
+.hist-open:hover{border-color:var(--teal);}
+.hist-del{background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:16px;padding:4px 6px;}
+.hist-del:hover{color:#B8402E;}
 </style>
 </head>
 <body>
@@ -161,7 +184,13 @@ button.secondary{
     <button class="primary" id="downloadBtn" type="button">PDF Download Karein</button>
     <button class="secondary" id="clearBtn" type="button">Sab Clear Karein</button>
   </div>
-  <p class="hint">PDF banne ke baad usko WhatsApp, email ya kisi bhi app se seedha share kar sakte hain.</p>
+  <p class="hint">PDF banne ke baad usko WhatsApp, email ya kisi bhi app se seedha share kar sakte hain. Har bill PDF banate hi neeche "Saved Bills" mein apne aap save ho jaata hai.</p>
+
+  <div class="panel">
+    <h2>Saved Bills</h2>
+    <input class="hist-search" id="historySearch" placeholder="Customer naam, invoice no. ya date se search karein">
+    <div id="historyList"></div>
+  </div>
 </div>
 
 <script>
@@ -172,10 +201,10 @@ function addRow(name='', qty=1, price=0){
   const tr = document.createElement('tr');
   tr.dataset.id = ++rowId;
   tr.innerHTML = `
-    <td><input class="i-name" value="${name}" placeholder="e.g. Notebook"></td>
-    <td><input class="i-qty" type="number" min="0" value="${qty}"></td>
-    <td><input class="i-price" type="number" min="0" step="0.01" value="${price}"></td>
-    <td><span class="amt i-amt">₹0.00</span></td>
+    <td data-label="Item"><input class="i-name" value="${name}" placeholder="e.g. Notebook"></td>
+    <td data-label="Qty"><input class="i-qty" type="number" min="0" value="${qty}"></td>
+    <td data-label="Price (₹)"><input class="i-price" type="number" min="0" step="0.01" value="${price}"></td>
+    <td data-label="Amount"><span class="amt i-amt">₹0.00</span></td>
     <td><button class="row-del" type="button" title="Remove">✕</button></td>`;
   body.appendChild(tr);
   tr.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calc));
@@ -251,17 +280,87 @@ function loadDraft(){
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return false;
     const data = JSON.parse(raw);
-    FIELD_IDS.forEach(id => { if(data.fields && data.fields[id] !== undefined) document.getElementById(id).value = data.fields[id]; });
-    if(data.taxPct !== undefined) document.getElementById('taxPct').value = data.taxPct;
-    body.innerHTML = '';
-    if(data.items && data.items.length){
-      data.items.forEach(it => addRow(it.name, it.qty, it.price));
-    } else {
-      addRow('', 1, 0);
-    }
+    applyDraftData(data);
     return true;
   }catch(e){ return false; }
 }
+
+function applyDraftData(data){
+  FIELD_IDS.forEach(id => { if(data.fields && data.fields[id] !== undefined) document.getElementById(id).value = data.fields[id]; });
+  if(data.taxPct !== undefined) document.getElementById('taxPct').value = data.taxPct;
+  body.innerHTML = '';
+  if(data.items && data.items.length){
+    data.items.forEach(it => addRow(it.name, it.qty, it.price));
+  } else {
+    addRow('', 1, 0);
+  }
+  calc();
+}
+
+// ---- Saved Bills history ----
+const HISTORY_KEY = 'billHistory_v1';
+function getHistory(){ try{ return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }catch(e){ return []; } }
+function setHistory(list){ try{ localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0,300))); }catch(e){} }
+function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function saveBillToHistory(){
+  const draft = collectDraft();
+  const list = getHistory();
+  const record = {
+    id: Date.now(),
+    invNo: draft.fields.invNo || '-',
+    date: draft.fields.invDate || '',
+    toName: draft.fields.toName || 'Bina naam',
+    total: document.getElementById('grandTotal').textContent,
+    draft
+  };
+  const idx = list.findIndex(r => r.invNo === record.invNo && record.invNo !== '-');
+  if(idx >= 0) list[idx] = record; else list.unshift(record);
+  setHistory(list);
+  renderHistory(document.getElementById('historySearch').value);
+}
+
+function renderHistory(filter=''){
+  const list = getHistory();
+  const q = filter.trim().toLowerCase();
+  const filtered = q ? list.filter(r =>
+    (r.toName||'').toLowerCase().includes(q) ||
+    (r.invNo||'').toLowerCase().includes(q) ||
+    (r.date||'').includes(q)
+  ) : list;
+  const wrap = document.getElementById('historyList');
+  if(!filtered.length){
+    wrap.innerHTML = '<p class="hint">' + (list.length ? 'Kuch nahi mila.' : 'Abhi tak koi bill save nahi hua — PDF download karte hi yahan dikhega.') + '</p>';
+    return;
+  }
+  wrap.innerHTML = filtered.map(r => `
+    <div class="hist-row">
+      <div class="hist-main">
+        <strong>${escapeHtml(r.toName)}</strong>
+        <span class="hist-meta">${escapeHtml(r.invNo)} · ${escapeHtml(r.date || '-')}</span>
+      </div>
+      <div class="hist-amt">${escapeHtml(r.total)}</div>
+      <div class="hist-actions">
+        <button class="hist-open" data-id="${r.id}" type="button">Open</button>
+        <button class="hist-del" data-id="${r.id}" type="button" title="Delete">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('historyList').addEventListener('click', e => {
+  const openBtn = e.target.closest('.hist-open');
+  const delBtn = e.target.closest('.hist-del');
+  if(openBtn){
+    const rec = getHistory().find(r => r.id === Number(openBtn.dataset.id));
+    if(rec){ applyDraftData(rec.draft); saveDraft(); window.scrollTo({top:0, behavior:'smooth'}); }
+  }
+  if(delBtn){
+    if(!confirm('Yeh saved bill delete karein?')) return;
+    setHistory(getHistory().filter(r => r.id !== Number(delBtn.dataset.id)));
+    renderHistory(document.getElementById('historySearch').value);
+  }
+});
+document.getElementById('historySearch').addEventListener('input', e => renderHistory(e.target.value));
 
 document.getElementById('invDate').valueAsDate = new Date();
 
@@ -270,6 +369,7 @@ if(!restored){
   addRow('', 1, 0);
   document.getElementById('saveText').textContent = 'Abhi tak kuch saved nahi';
 }
+renderHistory();
 
 document.querySelector('.wrap').addEventListener('input', scheduleSave);
 
@@ -449,6 +549,7 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
     }
 
     doc.save((val('invNo')||'invoice') + '.pdf');
+    saveBillToHistory();
   }catch(err){
     alert('PDF banane mein dikkat aayi: ' + err.message);
   }
