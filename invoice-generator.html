@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bill Banao — Invoice Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+:root{
+  --paper:#EEF0EC; --paper-dark:#E2E5DE; --ink:#12181A; --ink-soft:#4B5652;
+  --line:#C7CCC4; --teal:#215B52; --teal-dark:#173F39; --gold:#B8862E;
+  --card:#FBFCFA;
+  font-family:'Inter',system-ui,sans-serif;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#12181A; --paper-dark:#0C1011; --ink:#EDEFEA; --ink-soft:#A7B0AC;
+    --line:#2C3532; --card:#181F21; --teal:#4FA394; --gold:#D9A94D;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12181A; --paper-dark:#0C1011; --ink:#EDEFEA; --ink-soft:#A7B0AC;
+  --line:#2C3532; --card:#181F21; --teal:#4FA394; --gold:#D9A94D;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;background:var(--paper);color:var(--ink);}
+body{
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 24px);
+  min-height:100%;
+}
+.wrap{max-width:960px;margin:0 auto;padding:28px 20px 40px;}
+h1{font-family:'Fraunces',serif;font-weight:700;font-size:clamp(28px,4vw,40px);margin:0 0 4px;letter-spacing:-0.01em;}
+.sub{color:var(--ink-soft);margin:0 0 28px;font-size:15px;}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:20px;margin-bottom:18px;}
+.panel h2{font-family:'Fraunces',serif;font-size:19px;font-weight:600;margin:0 0 14px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;}
+@media(max-width:640px){.grid2{grid-template-columns:1fr;}}
+label{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:5px;}
+input,textarea{
+  width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:7px;
+  background:var(--paper);color:var(--ink);font-size:14.5px;font-family:inherit;
+}
+input:focus,textarea:focus{outline:2px solid var(--teal);outline-offset:1px;}
+textarea{resize:vertical;min-height:56px;}
+.field{margin-bottom:12px;}
+table{width:100%;border-collapse:collapse;margin-top:6px;}
+thead th{text-align:left;font-size:12px;color:var(--ink-soft);font-weight:600;padding:0 8px 8px;border-bottom:1px solid var(--line);}
+tbody td{padding:6px 8px;vertical-align:top;}
+tbody tr:not(:last-child) td{border-bottom:1px solid var(--line);}
+.col-name{width:42%;} .col-qty{width:14%;} .col-price{width:20%;} .col-amt{width:16%;} .col-del{width:8%;}
+.amt{font-family:'Fraunces',serif;font-weight:600;padding-top:11px;display:block;}
+.row-del{
+  background:none;border:none;color:var(--ink-soft);cursor:pointer;font-size:18px;
+  padding:6px;border-radius:6px;line-height:1;margin-top:2px;
+}
+.row-del:hover{color:#B8402E;background:var(--paper);}
+.addrow{
+  margin-top:10px;background:none;border:1px dashed var(--line);color:var(--teal);
+  padding:8px 14px;border-radius:7px;font-size:14px;cursor:pointer;font-weight:600;
+}
+.addrow:hover{border-color:var(--teal);}
+.totals{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;flex-direction:column;align-items:flex-end;gap:6px;}
+.trow{display:flex;justify-content:space-between;gap:24px;width:280px;font-size:14.5px;}
+.trow.grand{font-family:'Fraunces',serif;font-size:22px;font-weight:700;color:var(--teal-dark);padding-top:8px;border-top:1px solid var(--line);margin-top:4px;}
+:root:not([data-theme="light"]) .trow.grand{color:var(--gold);}
+@media(prefers-color-scheme:dark){.trow.grand{color:var(--gold);}}
+:root[data-theme="dark"] .trow.grand{color:var(--gold);}
+.tax-input{width:60px;display:inline-block;padding:4px 6px;}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px;}
+button.primary{
+  background:var(--teal);color:#fff;border:none;padding:13px 26px;border-radius:8px;
+  font-size:15.5px;font-weight:600;cursor:pointer;font-family:inherit;
+}
+button.primary:hover{background:var(--teal-dark);}
+button.secondary{
+  background:none;border:1px solid var(--line);color:var(--ink);padding:13px 22px;
+  border-radius:8px;font-size:15px;cursor:pointer;font-family:inherit;
+}
+.hint{font-size:12.5px;color:var(--ink-soft);margin-top:10px;}
+.mono{font-family:'Fraunces',serif;}
+.topbar{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;}
+.save-status{
+  font-size:12.5px;color:var(--ink-soft);display:flex;align-items:center;gap:6px;
+  margin-top:8px;white-space:nowrap;
+}
+.save-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex:none;}
+.reset-link{
+  background:none;border:none;color:var(--ink-soft);font-size:12.5px;text-decoration:underline;
+  cursor:pointer;font-family:inherit;padding:0;margin-top:4px;
+}
+.reset-link:hover{color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>Apna Bill Banayen</h1>
+      <p class="sub">Details bharein, item add karein — total apne aap calculate ho jayega. Neeche button se PDF bana kar kisi ko bhi bhej dein.</p>
+    </div>
+    <div>
+      <div class="save-status"><span class="save-dot" id="saveDot"></span><span id="saveText">Saved on this device</span></div>
+      <button class="reset-link" id="resetSaved" type="button">Saved data hatayein</button>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <h2>Sender (From)</h2>
+      <div class="field"><label>Company / Aapka Naam</label><input id="fromName" placeholder="e.g. Sharma Traders"></div>
+      <div class="field"><label>Address</label><textarea id="fromAddr" placeholder="Shop no., area, city, pincode"></textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Phone</label><input id="fromPhone" placeholder="+91 ..."></div>
+        <div class="field"><label>GSTIN / Email (optional)</label><input id="fromGst" placeholder="optional"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Receiver (To)</h2>
+      <div class="field"><label>Customer Naam</label><input id="toName" placeholder="e.g. Rahul Verma"></div>
+      <div class="field"><label>Address</label><textarea id="toAddr" placeholder="Customer address"></textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Phone</label><input id="toPhone" placeholder="+91 ..."></div>
+        <div class="field"><label>Email (optional)</label><input id="toEmail" placeholder="optional"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="grid2">
+      <div class="field"><label>Invoice No.</label><input id="invNo" value="INV-001"></div>
+      <div class="field"><label>Date</label><input id="invDate" type="date"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Items</h2>
+    <table>
+      <thead><tr>
+        <th class="col-name">Item Name</th><th class="col-qty">Qty / Pieces</th>
+        <th class="col-price">Price (₹)</th><th class="col-amt">Amount</th><th class="col-del"></th>
+      </tr></thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+    <button class="addrow" id="addRowBtn" type="button">+ Item add karein</button>
+
+    <div class="totals">
+      <div class="trow"><span>Subtotal</span><span id="subtotal" class="mono">₹0.00</span></div>
+      <div class="trow"><span>Tax (<input class="tax-input" id="taxPct" type="number" value="0" min="0">%)</span><span id="taxAmt" class="mono">₹0.00</span></div>
+      <div class="trow grand"><span>Total</span><span id="grandTotal">₹0.00</span></div>
+    </div>
+
+    <div class="field" style="margin-top:16px;"><label>Note (optional)</label><textarea id="note" placeholder="e.g. Payment within 7 days, bank details, thank-you note..."></textarea></div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="downloadBtn" type="button">PDF Download Karein</button>
+    <button class="secondary" id="clearBtn" type="button">Sab Clear Karein</button>
+  </div>
+  <p class="hint">PDF banne ke baad usko WhatsApp, email ya kisi bhi app se seedha share kar sakte hain.</p>
+</div>
+
+<script>
+const body = document.getElementById('itemsBody');
+let rowId = 0;
+
+function addRow(name='', qty=1, price=0){
+  const tr = document.createElement('tr');
+  tr.dataset.id = ++rowId;
+  tr.innerHTML = `
+    <td><input class="i-name" value="${name}" placeholder="e.g. Notebook"></td>
+    <td><input class="i-qty" type="number" min="0" value="${qty}"></td>
+    <td><input class="i-price" type="number" min="0" step="0.01" value="${price}"></td>
+    <td><span class="amt i-amt">₹0.00</span></td>
+    <td><button class="row-del" type="button" title="Remove">✕</button></td>`;
+  body.appendChild(tr);
+  tr.querySelectorAll('input').forEach(inp => inp.addEventListener('input', calc));
+  tr.querySelector('.row-del').addEventListener('click', () => { tr.remove(); calc(); });
+  calc();
+}
+
+function fmt(n){ return '₹' + n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+
+function calc(){
+  let subtotal = 0;
+  body.querySelectorAll('tr').forEach(tr => {
+    const qty = parseFloat(tr.querySelector('.i-qty').value) || 0;
+    const price = parseFloat(tr.querySelector('.i-price').value) || 0;
+    const amt = qty * price;
+    tr.querySelector('.i-amt').textContent = fmt(amt);
+    subtotal += amt;
+  });
+  const taxPct = parseFloat(document.getElementById('taxPct').value) || 0;
+  const taxAmt = subtotal * taxPct / 100;
+  document.getElementById('subtotal').textContent = fmt(subtotal);
+  document.getElementById('taxAmt').textContent = fmt(taxAmt);
+  document.getElementById('grandTotal').textContent = fmt(subtotal + taxAmt);
+}
+
+document.getElementById('addRowBtn').addEventListener('click', () => addRow());
+document.getElementById('taxPct').addEventListener('input', calc);
+document.getElementById('clearBtn').addEventListener('click', () => {
+  body.innerHTML = '';
+  FIELD_IDS.forEach(id => document.getElementById(id).value='');
+  document.getElementById('taxPct').value = 0;
+  addRow();
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  document.getElementById('saveText').textContent = 'Abhi tak kuch saved nahi';
+});
+
+const FIELD_IDS = ['fromName','fromAddr','fromPhone','fromGst','toName','toAddr','toPhone','toEmail','invNo','invDate','note'];
+const STORAGE_KEY = 'invoiceDraft_v1';
+let saveTimer = null;
+
+function collectDraft(){
+  const fields = {};
+  FIELD_IDS.forEach(id => fields[id] = document.getElementById(id).value);
+  const items = [];
+  body.querySelectorAll('tr').forEach(tr => {
+    items.push({
+      name: tr.querySelector('.i-name').value,
+      qty: tr.querySelector('.i-qty').value,
+      price: tr.querySelector('.i-price').value
+    });
+  });
+  return { fields, items, taxPct: document.getElementById('taxPct').value };
+}
+
+function saveDraft(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectDraft()));
+    const t = document.getElementById('saveText');
+    t.textContent = 'Saved on this device';
+  }catch(e){
+    document.getElementById('saveText').textContent = 'Save nahi ho paaya';
+  }
+}
+
+function scheduleSave(){
+  document.getElementById('saveText').textContent = 'Saving…';
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveDraft, 500);
+}
+
+function loadDraft(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    FIELD_IDS.forEach(id => { if(data.fields && data.fields[id] !== undefined) document.getElementById(id).value = data.fields[id]; });
+    if(data.taxPct !== undefined) document.getElementById('taxPct').value = data.taxPct;
+    body.innerHTML = '';
+    if(data.items && data.items.length){
+      data.items.forEach(it => addRow(it.name, it.qty, it.price));
+    } else {
+      addRow('', 1, 0);
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
+document.getElementById('invDate').valueAsDate = new Date();
+
+const restored = loadDraft();
+if(!restored){
+  addRow('', 1, 0);
+  document.getElementById('saveText').textContent = 'Abhi tak kuch saved nahi';
+}
+
+document.querySelector('.wrap').addEventListener('input', scheduleSave);
+
+document.getElementById('resetSaved').addEventListener('click', () => {
+  if(!confirm('Saved data hata dein? Yeh sirf is device/browser se hatega.')) return;
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+  FIELD_IDS.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('taxPct').value = 0;
+  body.innerHTML = '';
+  addRow('', 1, 0);
+  document.getElementById('invDate').valueAsDate = new Date();
+  document.getElementById('saveText').textContent = 'Abhi tak kuch saved nahi';
+  calc();
+});
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  try{
+    if(!window.jspdf || !window.jspdf.jsPDF){
+      alert('PDF library load nahi ho payi. Internet connection check karke page reload karein.');
+      return;
+    }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'pt', format:'a4'});
+    const val = id => document.getElementById(id).value.trim();
+    const M = 42, PW = 595, RIGHT = PW - M;
+    const TEAL = [26,75,68], TEAL_DARK = [16,50,45], INK = [30,36,34], SOFT = [110,120,116], LINE = [222,226,220], ALT = [243,245,242];
+
+    function fmtDate(iso){
+      if(!iso) return '-';
+      const [y,m,d] = iso.split('-');
+      const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return d && m ? `${d} ${months[parseInt(m,10)-1]} ${y}` : iso;
+    }
+
+    // ---- Header band ----
+    doc.setFillColor(...TEAL);
+    doc.rect(0, 0, PW, 92, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(20);
+    doc.text(val('fromName') || 'Your Company', M, 40);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+    const fromLines = [];
+    (val('fromAddr')||'').split('\n').forEach(l=>{ if(l.trim()) fromLines.push(l.trim()); });
+    if(val('fromPhone')) fromLines.push('Ph: '+val('fromPhone'));
+    if(val('fromGst')) fromLines.push(val('fromGst'));
+    let hy = 56;
+    fromLines.slice(0,3).forEach(l => { doc.text(l, M, hy); hy += 12; });
+
+    doc.setFont('helvetica','bold'); doc.setFontSize(24);
+    doc.text('INVOICE', RIGHT, 42, {align:'right'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    doc.text('No. ' + (val('invNo')||'-'), RIGHT, 62, {align:'right'});
+    doc.text(fmtDate(val('invDate')), RIGHT, 76, {align:'right'});
+
+    // ---- Bill From / Bill To ----
+    let y = 130;
+    const colW = (RIGHT-M-24)/2;
+    doc.setTextColor(...SOFT); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+    doc.text('BILLED BY', M, y);
+    doc.text('BILLED TO', M + colW + 24, y);
+    y += 16;
+    doc.setDrawColor(...TEAL); doc.setLineWidth(1.4);
+    doc.line(M, y-11, M+18, y-11);
+    doc.line(M+colW+24, y-11, M+colW+42, y-11);
+    doc.setLineWidth(1);
+
+    doc.setTextColor(...INK); doc.setFont('helvetica','bold'); doc.setFontSize(11.5);
+    doc.text(val('fromName')||'-', M, y);
+    doc.text(val('toName')||'-', M+colW+24, y);
+    y += 15;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+
+    const leftLines = [];
+    (val('fromAddr')||'').split('\n').forEach(l=>{ if(l.trim()) leftLines.push(l.trim()); });
+    if(val('fromPhone')) leftLines.push('Ph: '+val('fromPhone'));
+    if(val('fromGst')) leftLines.push(val('fromGst'));
+    const rightLines = [];
+    (val('toAddr')||'').split('\n').forEach(l=>{ if(l.trim()) rightLines.push(l.trim()); });
+    if(val('toPhone')) rightLines.push('Ph: '+val('toPhone'));
+    if(val('toEmail')) rightLines.push(val('toEmail'));
+
+    const maxLines = Math.max(leftLines.length, rightLines.length, 1);
+    for(let i=0;i<maxLines;i++){
+      if(leftLines[i]) doc.text(doc.splitTextToSize(leftLines[i], colW)[0], M, y+i*12.5);
+      if(rightLines[i]) doc.text(doc.splitTextToSize(rightLines[i], colW)[0], M+colW+24, y+i*12.5);
+    }
+    y += maxLines*12.5 + 20;
+
+    // ---- Items table ----
+    const colX = [M, 330, 405, 478];
+    const colW2 = [280, 68, 66, RIGHT-478];
+    const align2 = ['left','right','right','right'];
+    const rowH = 22;
+
+    function tableHeader(){
+      doc.setFillColor(...TEAL);
+      doc.rect(M, y, RIGHT-M, rowH, 'F');
+      doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(9.5);
+      ['ITEM','QTY','PRICE','AMOUNT'].forEach((h,i)=>{
+        const x = align2[i]==='right' ? colX[i]+colW2[i]-8 : colX[i]+8;
+        doc.text(h, x, y+15, {align: align2[i]});
+      });
+      y += rowH;
+    }
+    function ensureSpace(h){
+      if(y + h > 790){ doc.addPage(); y = 50; tableHeader(); }
+    }
+    tableHeader();
+    doc.setFont('helvetica','normal'); doc.setFontSize(9.5);
+
+    const rows = [];
+    document.querySelectorAll('#itemsBody tr').forEach(tr => {
+      const name = tr.querySelector('.i-name').value || '-';
+      const qty = parseFloat(tr.querySelector('.i-qty').value) || 0;
+      const price = parseFloat(tr.querySelector('.i-price').value) || 0;
+      rows.push([name, String(qty), price.toFixed(2), (qty*price).toFixed(2)]);
+    });
+
+    rows.forEach((r,idx) => {
+      ensureSpace(rowH);
+      if(idx % 2 === 1){ doc.setFillColor(...ALT); doc.rect(M, y, RIGHT-M, rowH, 'F'); }
+      doc.setTextColor(...INK);
+      r.forEach((cell,i) => {
+        const x = align2[i]==='right' ? colX[i]+colW2[i]-8 : colX[i]+8;
+        const text = i===0 ? doc.splitTextToSize(cell, colW2[i]-12)[0] : cell;
+        doc.text(String(text), x, y+15, {align: align2[i]});
+      });
+      y += rowH;
+    });
+    doc.setDrawColor(...LINE);
+
+    y += 14;
+
+    // ---- Totals ----
+    ensureSpace(90);
+    const rowsSum = rows.reduce((s,r) => s + parseFloat(r[3]), 0);
+    const taxPct = document.getElementById('taxPct').value || 0;
+    const taxAmtNum = rowsSum * parseFloat(taxPct) / 100;
+    const grandNum = rowsSum + taxAmtNum;
+    const fmtPdf = n => 'Rs. ' + n.toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const subtotal = fmtPdf(rowsSum);
+    const taxAmt = fmtPdf(taxAmtNum);
+    const grand = fmtPdf(grandNum);
+    const boxX = 340, boxW = RIGHT - boxX;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(...INK);
+    doc.text('Subtotal', boxX, y); doc.text(subtotal, RIGHT, y, {align:'right'}); y += 16;
+    doc.text('Tax (' + taxPct + '%)', boxX, y); doc.text(taxAmt, RIGHT, y, {align:'right'}); y += 12;
+    doc.setDrawColor(...LINE); doc.line(boxX, y, RIGHT, y); y += 18;
+
+    doc.setFillColor(...TEAL_DARK);
+    doc.rect(boxX, y-16, boxW, 26, 'F');
+    doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(12.5);
+    doc.text('TOTAL', boxX+10, y+2);
+    doc.text(grand, RIGHT-10, y+2, {align:'right'});
+    y += 34;
+
+    // ---- Note / footer ----
+    const note = val('note');
+    if(note){
+      ensureSpace(40);
+      doc.setTextColor(...SOFT); doc.setFont('helvetica','bold'); doc.setFontSize(9);
+      doc.text('NOTE', M, y); y += 13;
+      doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+      note.split('\n').forEach(l => {
+        doc.splitTextToSize(l, RIGHT-M).forEach(ln => { ensureSpace(13); doc.text(ln, M, y); y += 13; });
+      });
+    }
+
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let p=1; p<=pageCount; p++){
+      doc.setPage(p);
+      doc.setDrawColor(...LINE); doc.line(M, 812, RIGHT, 812);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...SOFT);
+      doc.text('Thank you for your business', M, 826);
+      if(pageCount > 1) doc.text('Page ' + p + ' of ' + pageCount, RIGHT, 826, {align:'right'});
+    }
+
+    doc.save((val('invNo')||'invoice') + '.pdf');
+  }catch(err){
+    alert('PDF banane mein dikkat aayi: ' + err.message);
+  }
+});
+</script>
+</body>
+</html>
